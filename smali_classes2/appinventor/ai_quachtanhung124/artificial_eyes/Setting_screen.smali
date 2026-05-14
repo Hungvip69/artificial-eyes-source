@@ -6747,7 +6747,7 @@
 
     move-result-object v2
 
-    const-string v3, "Device.txt"
+    const-string v3, "DEVICE.txt"
 
     invoke-static {v2, v3}, Lgnu/lists/LList;->list2(Ljava/lang/Object;Ljava/lang/Object;)Lgnu/lists/Pair;
 
@@ -7132,7 +7132,7 @@
 
     sget-object v1, Lappinventor/ai_quachtanhung124/artificial_eyes/Setting_screen;->Lit19:Lgnu/mapping/SimpleSymbol;
 
-    const-string v2, "Device.txt"
+    const-string v2, "DEVICE.txt"
 
     invoke-static {v2}, Lgnu/lists/LList;->list1(Ljava/lang/Object;)Lgnu/lists/Pair;
 
@@ -7378,7 +7378,7 @@
 
     sget-object v1, Lappinventor/ai_quachtanhung124/artificial_eyes/Setting_screen;->Lit19:Lgnu/mapping/SimpleSymbol;
 
-    const-string v2, "Device.txt"
+    const-string v2, "DEVICE.txt"
 
     invoke-static {v2}, Lgnu/lists/LList;->list1(Ljava/lang/Object;)Lgnu/lists/Pair;
 
