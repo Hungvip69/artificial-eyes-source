@@ -1,6 +1,7 @@
 package appinventor.ai_quachtanhung124.artificial_eyes;
 
 import android.os.Bundle;
+import android.util.Log;
 import androidx.fragment.app.FragmentTransaction;
 import com.google.appinventor.components.common.Permission;
 import com.google.appinventor.components.common.PropertyTypeConstants;
@@ -60,10 +61,14 @@ import kawa.lib.misc;
 import kawa.lib.strings;
 import kawa.standard.Scheme;
 import kawa.standard.throw_name;
+import java.io.BufferedReader;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
 
 /* JADX INFO: compiled from: Setting_screen.yail */
 /* JADX INFO: loaded from: classes2.dex */
 public class Setting_screen extends Form implements Runnable {
+    private static final String TAG = "ArtificialEyesSetting";
     static final SimpleSymbol Lit0;
     static final SimpleSymbol Lit1;
     static final SimpleSymbol Lit10;
@@ -1028,8 +1033,14 @@ public class Setting_screen extends Form implements Runnable {
 
     public Object Setting_screen$Initialize() throws Throwable {
         runtime.setThisForm();
-        runtime.callComponentMethod(Lit18, Lit19, LList.list1("SĐT.txt"), Lit20);
-        return runtime.callComponentMethod(Lit21, Lit19, LList.list1("Device.txt"), Lit22);
+        ensureFileExists("SĐT.txt");
+        ensureFileExists("DEVICE.txt");
+        String phone = readText("SĐT.txt");
+        String device = readText("DEVICE.txt");
+        runtime.setAndCoerceProperty$Ex(Lit99, Lit69, phone, Lit7);
+        runtime.setAndCoerceProperty$Ex(Lit96, Lit69, "Số điện thoại khẩn cấp: " + phone, Lit7);
+        runtime.setAndCoerceProperty$Ex(Lit66, Lit69, "Phần cứng hiện tại: " + device, Lit7);
+        return runtime.addGlobalVarToCurrentFormEnvironment(Lit3, Boolean.valueOf(isValidDevice(device)));
     }
 
     public Object Setting_screen$PermissionGranted(Object $permissionName) {
@@ -1130,10 +1141,11 @@ public class Setting_screen extends Form implements Runnable {
     /* JADX INFO: renamed from: Chọn_phần_cứng_BT$AfterPicking, reason: contains not printable characters */
     public Object m29Chn_phn_cng_BT$AfterPicking() throws Throwable {
         runtime.setThisForm();
-        if (runtime.callComponentMethod(Lit80, Lit85, LList.list1(runtime.get$Mnproperty.apply2(Lit72, Lit86)), Lit87) == Boolean.FALSE) {
+        String selectedDevice = String.valueOf(runtime.get$Mnproperty.apply2(Lit72, Lit86));
+        if (!isValidDevice(selectedDevice)) {
             return Values.empty;
         }
-        runtime.callComponentMethod(Lit21, Lit88, LList.list2(runtime.get$Mnproperty.apply2(Lit72, Lit86), "Device.txt"), Lit89);
+        writeText("DEVICE.txt", selectedDevice);
         return runtime.addGlobalVarToCurrentFormEnvironment(Lit3, Boolean.TRUE);
     }
 
@@ -1244,13 +1256,14 @@ public class Setting_screen extends Form implements Runnable {
         Pair pairList1;
         PairWithPosition pairWithPosition;
         runtime.setThisForm();
-        if (runtime.callYailPrimitive(runtime.yail$Mnnot$Mnequal$Qu, LList.list2(runtime.callYailPrimitive(strings.string$Mnlength, LList.list1(runtime.get$Mnproperty.apply2(Lit99, Lit69)), Lit141, PropertyTypeConstants.PROPERTY_TYPE_LENGTH), Lit37), Lit142, "=") != Boolean.FALSE) {
+        String phone = String.valueOf(runtime.get$Mnproperty.apply2(Lit99, Lit69));
+        if (!isValidPhone(phone)) {
             simpleSymbol = Lit143;
             simpleSymbol2 = Lit144;
             pairList1 = LList.list3("Vui lòng nhập số điện thoại hợp lệ", "Chưa nhập số điện thoại!", "Tôi sẽ nhập lại số điện thoại");
             pairWithPosition = Lit145;
         } else if (runtime.processAndDelayed$V(new Object[]{lambda$Fn36, lambda$Fn37}) != Boolean.FALSE) {
-            runtime.callComponentMethod(Lit18, Lit88, LList.list2(runtime.get$Mnproperty.apply2(Lit99, Lit69), "SĐT.txt"), Lit149);
+            writeText("SĐT.txt", phone);
             runtime.callComponentMethod(Lit143, Lit144, LList.list3("Cài đặt của bạn đã được lưu", "Đã lưu cài đặt!", "OK!"), Lit150);
             runtime.callComponentMethod(Lit18, Lit19, LList.list1("SĐT.txt"), Lit151);
             simpleSymbol = Lit21;
@@ -1301,9 +1314,48 @@ public class Setting_screen extends Form implements Runnable {
             return Values.empty;
         }
         runtime.addGlobalVarToCurrentFormEnvironment(Lit3, Boolean.FALSE);
-        runtime.callComponentMethod(Lit18, Lit88, LList.list2(runtime.get$Mnproperty.apply2(Lit99, Lit69), "SĐT.txt"), Lit165);
+        String phone = String.valueOf(runtime.get$Mnproperty.apply2(Lit99, Lit69));
+        if (isValidPhone(phone)) {
+            writeText("SĐT.txt", phone);
+        }
         runtime.callComponentMethod(Lit143, Lit144, LList.list3("Cài đặt của bạn đã được lưu", "Đã lưu cài đặt!", "OK!"), Lit166);
-        return runtime.callComponentMethod(Lit18, Lit19, LList.list1("SĐT.txt"), Lit167);
+        return Values.empty;
+    }
+
+    private void ensureFileExists(String fileName) {
+        try {
+            if (!getFileStreamPath(fileName).exists()) {
+                writeText(fileName, "");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "ensureFileExists fail: " + fileName, e);
+        }
+    }
+
+    private void writeText(String fileName, String value) {
+        try (FileOutputStream fos = openFileOutput(fileName, MODE_PRIVATE)) {
+            fos.write((value == null ? "" : value.trim()).getBytes("UTF-8"));
+        } catch (Exception e) {
+            Log.e(TAG, "writeText fail: " + fileName, e);
+        }
+    }
+
+    private String readText(String fileName) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(openFileInput(fileName), "UTF-8"))) {
+            String line = reader.readLine();
+            return line == null ? "" : line.trim();
+        } catch (Exception e) {
+            Log.e(TAG, "readText fail: " + fileName, e);
+            return "";
+        }
+    }
+
+    private boolean isValidPhone(String phone) {
+        return phone != null && phone.trim().matches("^\\+?[0-9]{9,15}$");
+    }
+
+    private boolean isValidDevice(String device) {
+        return device != null && device.trim().matches("^[A-Za-z0-9 _\\-.]{3,}$");
     }
 
     static Object lambda43() {

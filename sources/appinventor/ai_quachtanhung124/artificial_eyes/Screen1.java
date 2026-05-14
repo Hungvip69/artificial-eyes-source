@@ -1,6 +1,7 @@
 package appinventor.ai_quachtanhung124.artificial_eyes;
 
 import android.os.Bundle;
+import android.util.Log;
 import androidx.fragment.app.FragmentTransaction;
 import com.NimaAI.NimaAI;
 import com.Scorpio.ScSpeechRecognizer;
@@ -69,10 +70,16 @@ import kawa.standard.Scheme;
 import kawa.standard.require;
 import kawa.standard.throw_name;
 import uk.co.metricrat.imagebase64.ImageBase64;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 
 /* JADX INFO: compiled from: Screen1.yail */
 /* JADX INFO: loaded from: classes.dex */
 public class Screen1 extends Form implements Runnable {
+    private static final String TAG = "ArtificialEyesScreen1";
+    private enum ModeState { IDLE, WALKING, READING }
+    private ModeState modeState = ModeState.IDLE;
+    private boolean modeSwitching = false;
     static final SimpleSymbol Lit0;
     static final SimpleSymbol Lit1;
     static final SimpleSymbol Lit10;
@@ -2848,7 +2855,8 @@ public class Screen1 extends Form implements Runnable {
 
     public Object Screen1$Initialize() throws Throwable {
         runtime.setThisForm();
-        runtime.callComponentMethod(Lit97, Lit98, LList.list1("SĐT.txt"), Lit99);
+        ensureFileExists("SĐT.txt");
+        runtime.setAndCoerceProperty$Ex(Lit274, Lit342, readText("SĐT.txt"), Lit21);
         runtime.setAndCoerceProperty$Ex(Lit100, Lit101, Lit102, Lit88);
         runtime.setAndCoerceProperty$Ex(Lit27, Lit103, Lit34, Lit88);
         runtime.setAndCoerceProperty$Ex(Lit27, Lit14, Boolean.FALSE, Lit15);
@@ -3032,6 +3040,7 @@ public class Screen1 extends Form implements Runnable {
             return runtime.addGlobalVarToCurrentFormEnvironment(Lit80, Lit81);
         }
         if (runtime.callYailPrimitive(runtime.string$Mncontains, LList.list2($result2 instanceof Package ? runtime.signalRuntimeError(strings.stringAppend("The variable ", runtime.getDisplayRepresentation(Lit213), " is not bound in the current context"), "Unbound Variable") : $result2, "đi bộ"), Lit215, "string contains") != Boolean.FALSE) {
+            if (!switchMode(ModeState.WALKING)) return Values.empty;
             runtime.addGlobalVarToCurrentFormEnvironment(Lit80, Lit81);
             applyToArgs = Scheme.applyToArgs;
             simpleSymbol5 = Lit24;
@@ -3046,6 +3055,7 @@ public class Screen1 extends Form implements Runnable {
                     obj = LList.Empty;
                 } else {
                     if (runtime.callYailPrimitive(runtime.string$Mncontains, LList.list2($result2 instanceof Package ? runtime.signalRuntimeError(strings.stringAppend("The variable ", runtime.getDisplayRepresentation(Lit213), " is not bound in the current context"), "Unbound Variable") : $result2, "đọc"), Lit220, "string contains") != Boolean.FALSE) {
+                        if (!switchMode(ModeState.READING)) return Values.empty;
                         runtime.addGlobalVarToCurrentFormEnvironment(Lit80, Lit81);
                         runtime.callComponentMethod(Lit5, Lit6, LList.list1("Đang bật chế độ đọc"), Lit221);
                         runtime.callComponentMethod(Lit222, Lit121, LList.list2(runtime.lookupInCurrentFormEnvironment(Lit123), runtime.getProperty$1(Lit222, Lit223)), Lit224);
@@ -3452,6 +3462,54 @@ public class Screen1 extends Form implements Runnable {
 
     public String getSimpleName(Object object) {
         return object.getClass().getSimpleName();
+    }
+
+    private boolean switchMode(ModeState target) {
+        if (modeSwitching) {
+            Log.w(TAG, "switchMode ignored while switching: " + target);
+            return false;
+        }
+        modeSwitching = true;
+        try {
+            stopCurrentMode();
+            modeState = target;
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "switchMode failed: " + target, e);
+            modeState = ModeState.IDLE;
+            return false;
+        } finally {
+            modeSwitching = false;
+        }
+    }
+
+    private void stopCurrentMode() {
+        runtime.setAndCoerceProperty$Ex(Lit27, Lit14, Boolean.FALSE, Lit15);
+        runtime.setAndCoerceProperty$Ex(Lit108, Lit14, Boolean.FALSE, Lit15);
+        runtime.setAndCoerceProperty$Ex(Lit13, Lit14, Boolean.FALSE, Lit15);
+        runtime.callComponentMethod(Lit31, Lit32, LList.Empty, LList.Empty);
+        runtime.callComponentMethod(Lit5, Lit6, LList.list1("Đã dừng chế độ hiện tại"), Lit33);
+        modeState = ModeState.IDLE;
+    }
+
+    private void ensureFileExists(String fileName) {
+        try {
+            if (!getFileStreamPath(fileName).exists()) {
+                openFileOutput(fileName, MODE_PRIVATE).close();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "ensureFileExists fail: " + fileName, e);
+        }
+    }
+
+    private String readText(String fileName) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(openFileInput(fileName), "UTF-8"))) {
+            String line = reader.readLine();
+            return line == null ? "" : line.trim();
+        } catch (Exception e) {
+            Log.e(TAG, "readText fail: " + fileName, e);
+            return "";
+        }
     }
 
     @Override // com.google.appinventor.components.runtime.Form, com.google.appinventor.components.runtime.AppInventorCompatActivity, android.app.Activity
