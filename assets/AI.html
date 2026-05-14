@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Cảnh báo người cho MIT App Inventor WebViewer</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .app {
+      position: fixed;
+      inset: 0;
+      background: #000;
+    }
+    video, canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #000;
+    }
+    video {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom)) 14px;
+    }
+    .topbar, .bottombar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .chip {
+      background: rgba(0, 0, 0, 0.58);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      font-size: 14px;
+      line-height: 1.35;
+      max-width: 80vw;
+    }
+    .chip strong {
+      color: #86efac;
+    }
+    .centerMessage {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      color: #e5e7eb;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 3;
+    }
+    .centerMessage.hidden {
+      display: none;
+    }
+    .centerCard {
+      max-width: 420px;
+      background: rgba(0, 0, 0, 0.72);
+      border-radius: 22px;
+      padding: 18px 16px;
+      backdrop-filter: blur(10px);
+      line-height: 1.5;
+      font-size: 16px;
+    }
+    .error {
+      color: #fecaca;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="overlay">
+      <div class="topbar">
+        <div class="chip">Trạng thái: <strong id="statusText">Đang tải AI...</strong></div>
+        <div class="chip" id="personText">Không có người</div>
+      </div>
+      <div class="bottombar">
+        <div class="chip">Loại: <strong id="bodyText">Chưa xác định</strong></div>
+        <div class="chip">Khoảng cách: <strong id="distanceText">Chưa xác định</strong></div>
+      </div>
+    </div>
+
+    <div class="centerMessage" id="centerMessage">
+      <div class="centerCard" id="centerCardText">Đang tải AI, camera sẽ tự bật...</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { FilesetResolver, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusText = document.getElementById('statusText');
+    const personText = document.getElementById('personText');
+    const bodyText = document.getElementById('bodyText');
+    const distanceText = document.getElementById('distanceText');
+    const centerMessage = document.getElementById('centerMessage');
+    const centerCardText = document.getElementById('centerCardText');
+
+    let poseLandmarker = null;
+    let stream = null;
+    let detecting = false;
+    let animationId = null;
+    let lastVideoTime = -1;
+    let isBusy = false;
+
+    let stableType = 'none';
+    let stablePose = null;
+    let stableHitFrames = 0;
+    let stableMissFrames = 0;
+
+    let lastAlertKey = '';
+    let lastAlertTime = 0;
+    let personWasPresent = false;
+    let lostPersonAnnounced = true;
+    let lastSeenPersonTime = 0;
+    let lastDangerLevel = 0;
+    let vietnameseVoice = null;
+    let audioUnlocked = false;
+
+    const DETECTION_CONF = 0.72;
+    const PRESENCE_CONF = 0.72;
+    const TRACKING_CONF = 0.72;
+    const REQUIRED_HIT_FRAMES = 3;
+    const REQUIRED_MISS_FRAMES = 4;
+
+    // Tối ưu cho người mù:
+    // - Cảnh báo gần/rất gần lặp nhanh hơn.
+    // - Cảnh báo xa/trung bình lặp thưa để tránh gây nhiễu.
+    // - Khi người biến mất, đọc một lần để người dùng biết phía trước đã trống.
+    const NO_PERSON_ANNOUNCE_DELAY = 1800;
+    const ALERT_COOLDOWN_BY_DISTANCE = {
+      'Rất gần': 1200,
+      'Gần': 2200,
+      'Trung bình': 4500,
+      'Xa': 8000
+    };
+    const DANGER_LEVEL_BY_DISTANCE = {
+      'Xa': 1,
+      'Trung bình': 2,
+      'Gần': 3,
+      'Rất gần': 4
+    };
+
+    function setStatus(text) {
+      statusText.textContent = text;
+    }
+
+    function setCenterMessage(text, isError = false) {
+      centerCardText.textContent = text;
+      centerCardText.className = isError ? 'centerCard error' : 'centerCard';
+      centerMessage.classList.remove('hidden');
+    }
+
+    function hideCenterMessage() {
+      centerMessage.classList.add('hidden');
+    }
+
+    function isAppInventorWebViewer() {
+      return !!(
+        window.AppInventor &&
+        typeof window.AppInventor.setWebViewString === 'function'
+      );
+    }
+
+    function sendToAppInventor(message, vibrationMs) {
+      if (!isAppInventorWebViewer()) return false;
+
+      try {
+        // Định dạng cho MIT App Inventor Blocks:
+        // ALERT|số_mili_giây_rung|nội_dung_đọc|thời_gian
+        const safeMessage = String(message).replace(/\|/g, ' ');
+        const safeVibration = Math.max(0, Math.round(Number(vibrationMs) || 0));
+        const payload = `ALERT|${safeVibration}|${safeMessage}|${Date.now()}`;
+        window.AppInventor.setWebViewString(payload);
+        return true;
+      } catch (error) {
+        console.warn('Không gửi được cảnh báo sang App Inventor:', error);
+        return false;
+      }
+    }
+
+    function loadVietnameseVoice() {
+      if (!('speechSynthesis' in window)) return;
+
+      const voices = window.speechSynthesis.getVoices();
+      vietnameseVoice =
+        voices.find(v => v.lang === 'vi-VN') ||
+        voices.find(v => v.lang.toLowerCase().startsWith('vi')) ||
+        voices[0] ||
+        null;
+    }
+
+    if ('speechSynthesis' in window) {
+      loadVietnameseVoice();
+      window.speechSynthesis.onvoiceschanged = loadVietnameseVoice;
+    }
+
+    function speakWebFallback(message) {
+      // Chỉ dùng khi mở file bằng Chrome thường. Trong App Inventor, app sẽ đọc bằng TextToSpeech1.
+      if (!('speechSynthesis' in window)) return;
+
+      try {
+        loadVietnameseVoice();
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+
+        const utterance = new SpeechSynthesisUtterance(message);
+        utterance.lang = 'vi-VN';
+        utterance.rate = 1.08;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        if (vietnameseVoice) utterance.voice = vietnameseVoice;
+
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.warn('Lỗi giọng đọc fallback:', error);
+      }
+    }
+
+    function vibrateWebFallback(patternOrMs) {
+      // Chỉ dùng khi mở file bằng Chrome thường. Trong App Inventor, app sẽ rung bằng Sound1.Vibrate.
+      if (!('vibrate' in navigator)) return;
+
+      try {
+        navigator.vibrate(patternOrMs);
+      } catch (error) {
+        console.warn('Lỗi rung fallback:', error);
+      }
+    }
+
+    function notifyAlert(message, vibrationMs) {
+      // Ưu tiên MIT App Inventor WebViewer.
+      if (sendToAppInventor(message, vibrationMs)) return;
+
+      // Fallback cho trường hợp mở file bằng trình duyệt thường.
+      vibrateWebFallback(vibrationMs);
+      speakWebFallback(message);
+    }
+
+    function resizeCanvas() {
+      const w = video.videoWidth || window.innerWidth || 1280;
+      const h = video.videoHeight || window.innerHeight || 720;
+      canvas.width = w;
+      canvas.height = h;
+    }
+
+    function drawFrameOnly() {
+      resizeCanvas();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    function visible(point, min = 0.55) {
+      return !!point && (point.visibility ?? 1) >= min && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1;
+    }
+
+    function getCorePoints(pose) {
+      return {
+        nose: pose[0],
+        leftEye: pose[2],
+        rightEye: pose[5],
+        leftShoulder: pose[11],
+        rightShoulder: pose[12],
+        leftElbow: pose[13],
+        rightElbow: pose[14],
+        leftHip: pose[23],
+        rightHip: pose[24],
+        leftKnee: pose[25],
+        rightKnee: pose[26],
+        leftAnkle: pose[27],
+        rightAnkle: pose[28],
+        leftHeel: pose[29],
+        rightHeel: pose[30],
+        leftFoot: pose[31],
+        rightFoot: pose[32]
+      };
+    }
+
+    function avgY(points) {
+      const list = points.filter(Boolean);
+      return list.reduce((sum, p) => sum + p.y, 0) / list.length;
+    }
+
+    function avgX(points) {
+      const list = points.filter(Boolean);
+      return list.reduce((sum, p) => sum + p.x, 0) / list.length;
+    }
+
+    function bodyHeightFromVisible(pose) {
+      const pts = pose.filter(p => visible(p, 0.45));
+      if (pts.length < 6) return 0;
+      let minY = 1;
+      let maxY = 0;
+      for (const p of pts) {
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+      return maxY - minY;
+    }
+
+    function sideComplete(knee, ankle, heel, foot) {
+      return visible(knee, 0.58) && visible(ankle, 0.56) && (visible(heel, 0.5) || visible(foot, 0.5));
+    }
+
+    function torsoLooksHuman(p) {
+      const shouldersVisible = visible(p.leftShoulder, 0.72) && visible(p.rightShoulder, 0.72);
+      const hipsVisible = visible(p.leftHip, 0.72) && visible(p.rightHip, 0.72);
+      if (!shouldersVisible || !hipsVisible) return false;
+
+      const shoulderY = avgY([p.leftShoulder, p.rightShoulder]);
+      const hipY = avgY([p.leftHip, p.rightHip]);
+      const shoulderWidth = Math.abs(p.leftShoulder.x - p.rightShoulder.x);
+      const hipWidth = Math.abs(p.leftHip.x - p.rightHip.x);
+      const torsoHeight = hipY - shoulderY;
+      const centerDiff = Math.abs(avgX([p.leftShoulder, p.rightShoulder]) - avgX([p.leftHip, p.rightHip]));
+
+      if (!(shoulderY < hipY)) return false;
+      if (torsoHeight < 0.13) return false;
+      if (shoulderWidth < 0.07 || hipWidth < 0.06) return false;
+      if (centerDiff > 0.12) return false;
+
+      const widthRatio = shoulderWidth / Math.max(hipWidth, 0.001);
+      if (widthRatio < 0.5 || widthRatio > 2.0) return false;
+
+      const headVisible = visible(p.nose, 0.68) || (visible(p.leftEye, 0.65) && visible(p.rightEye, 0.65));
+      if (headVisible) {
+        const headY = visible(p.nose, 0.68) ? p.nose.y : avgY([p.leftEye, p.rightEye]);
+        if (!(headY < shoulderY)) return false;
+      }
+
+      return true;
+    }
+
+    function classifyPoseStrict(pose) {
+      const p = getCorePoints(pose);
+      if (!torsoLooksHuman(p)) return 'none';
+
+      const shoulderY = avgY([p.leftShoulder, p.rightShoulder]);
+      const hipY = avgY([p.leftHip, p.rightHip]);
+      const leftLegOk = sideComplete(p.leftKnee, p.leftAnkle, p.leftHeel, p.leftFoot)
+        && p.leftKnee.y > hipY && p.leftAnkle.y > p.leftKnee.y;
+      const rightLegOk = sideComplete(p.rightKnee, p.rightAnkle, p.rightHeel, p.rightFoot)
+        && p.rightKnee.y > hipY && p.rightAnkle.y > p.rightKnee.y;
+
+      const bodyHeight = bodyHeightFromVisible(pose);
+      const elbowOk = (visible(p.leftElbow, 0.5) && p.leftElbow.y > shoulderY)
+        || (visible(p.rightElbow, 0.5) && p.rightElbow.y > shoulderY);
+      const torsoOnlyOk = hipY - shoulderY > 0.13 && bodyHeight > 0.24;
+
+      if ((leftLegOk || rightLegOk) && bodyHeight > 0.46) {
+        return 'full';
+      }
+
+      if (torsoOnlyOk && (elbowOk || bodyHeight > 0.3)) {
+        return 'half';
+      }
+
+      return 'none';
+    }
+
+    function estimateDistance(pose, type) {
+      const bodyHeight = bodyHeightFromVisible(pose);
+      if (type === 'full') {
+        if (bodyHeight > 0.8) return 'Rất gần';
+        if (bodyHeight > 0.56) return 'Gần';
+        if (bodyHeight > 0.31) return 'Trung bình';
+        return 'Xa';
+      }
+      if (bodyHeight > 0.62) return 'Rất gần';
+      if (bodyHeight > 0.42) return 'Gần';
+      if (bodyHeight > 0.24) return 'Trung bình';
+      return 'Xa';
+    }
+
+    function getPoseBox(pose) {
+      const pts = pose.filter(p => visible(p, 0.45));
+      if (pts.length < 6) return null;
+
+      let minX = 1, minY = 1, maxX = 0, maxY = 0;
+      for (const p of pts) {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      }
+
+      const padX = 0.05;
+      const padY = 0.05;
+      const x1 = Math.max(0, minX - padX) * canvas.width;
+      const y1 = Math.max(0, minY - padY) * canvas.height;
+      const x2 = Math.min(1, maxX + padX) * canvas.width;
+      const y2 = Math.min(1, maxY + padY) * canvas.height;
+      return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+    }
+
+    function drawAcceptedPose(pose, type) {
+      drawFrameOnly();
+      const box = getPoseBox(pose);
+      const distance = estimateDistance(pose, type);
+      const typeLabel = type === 'full' ? 'Toàn thân' : 'Nửa thân';
+
+      if (box) {
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 4;
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.10)';
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+
+        const label = `${typeLabel} - ${distance}`;
+        ctx.font = 'bold 20px Arial';
+        const textWidth = ctx.measureText(label).width;
+        const textY = Math.max(0, box.y - 34);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+        ctx.fillRect(box.x, textY, textWidth + 16, 30);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label, box.x + 8, textY + 21);
+      }
+    }
+
+    function updateStableState(nextType, nextPose) {
+      if (nextType !== 'none' && nextPose) {
+        stableHitFrames += 1;
+        stableMissFrames = 0;
+        if (stableHitFrames >= REQUIRED_HIT_FRAMES) {
+          stableType = nextType;
+          stablePose = nextPose;
+        }
+      } else {
+        stableMissFrames += 1;
+        stableHitFrames = 0;
+        if (stableMissFrames >= REQUIRED_MISS_FRAMES) {
+          stableType = 'none';
+          stablePose = null;
+        }
+      }
+    }
+
+    function announceForDistance(type, distance) {
+      const now = Date.now();
+      const typeLabel = type === 'full' ? 'toàn thân' : 'nửa thân';
+      const dangerLevel = DANGER_LEVEL_BY_DISTANCE[distance] || 0;
+      const alertKey = `${type}-${distance}`;
+      const cooldown = ALERT_COOLDOWN_BY_DISTANCE[distance] || 3500;
+      const isMoreDangerous = dangerLevel > lastDangerLevel;
+
+      // Nếu cùng cảnh báo thì lặp theo khoảng cách: rất gần lặp nhanh, xa lặp thưa.
+      if (alertKey === lastAlertKey && now - lastAlertTime < cooldown) {
+        return;
+      }
+
+      // Nếu chuyển sang mức ít nguy hiểm hơn, đợi một chút để tránh đọc quá nhiều.
+      if (alertKey !== lastAlertKey && !isMoreDangerous && now - lastAlertTime < 1500) {
+        return;
+      }
+
+      lastAlertKey = alertKey;
+      lastAlertTime = now;
+      lastDangerLevel = dangerLevel;
+
+      if (distance === 'Rất gần') {
+        notifyAlert(`Người ${typeLabel} rất gần. Dừng lại`, 900);
+        return;
+      }
+
+      if (distance === 'Gần') {
+        notifyAlert(`Người ${typeLabel} gần phía trước`, 550);
+        return;
+      }
+
+      if (distance === 'Trung bình') {
+        notifyAlert(`Có người ${typeLabel} phía trước, khoảng cách trung bình`, 220);
+        return;
+      }
+
+      notifyAlert(`Có người ${typeLabel} ở xa phía trước`, 90);
+    }
+
+    function announceNoPersonIfNeeded() {
+      const now = Date.now();
+      if (!personWasPresent || lostPersonAnnounced) return;
+      if (now - lastSeenPersonTime < NO_PERSON_ANNOUNCE_DELAY) return;
+
+      lostPersonAnnounced = true;
+      personWasPresent = false;
+      lastDangerLevel = 0;
+      lastAlertKey = 'none';
+      notifyAlert('Không còn thấy người phía trước', 70);
+    }
+
+    function renderState() {
+      if (stableType !== 'none' && stablePose) {
+        const typeLabel = stableType === 'full' ? 'Toàn thân' : 'Nửa thân';
+        const distance = estimateDistance(stablePose, stableType);
+
+        personWasPresent = true;
+        lostPersonAnnounced = false;
+        lastSeenPersonTime = Date.now();
+
+        personText.textContent = 'Có người';
+        bodyText.textContent = typeLabel;
+        distanceText.textContent = distance;
+        drawAcceptedPose(stablePose, stableType);
+        announceForDistance(stableType, distance);
+        hideCenterMessage();
+      } else {
+        personText.textContent = 'Không có người';
+        bodyText.textContent = 'Chưa xác định';
+        distanceText.textContent = 'Chưa xác định';
+        drawFrameOnly();
+        announceNoPersonIfNeeded();
+      }
+    }
+
+    async function detectLoop() {
+      if (!detecting || !poseLandmarker) return;
+
+      if (video.readyState >= 2 && !isBusy && video.currentTime !== lastVideoTime) {
+        isBusy = true;
+        lastVideoTime = video.currentTime;
+        try {
+          const result = poseLandmarker.detectForVideo(video, performance.now());
+          const poses = result?.landmarks || [];
+          let nextType = 'none';
+          let nextPose = null;
+
+          if (poses.length > 0) {
+            for (const pose of poses) {
+              const t = classifyPoseStrict(pose);
+              if (t === 'full') {
+                nextType = 'full';
+                nextPose = pose;
+                break;
+              }
+              if (t === 'half' && nextType === 'none') {
+                nextType = 'half';
+                nextPose = pose;
+              }
+            }
+          }
+
+          updateStableState(nextType, nextPose);
+          renderState();
+        } catch (error) {
+          console.error(error);
+          setStatus('Lỗi nhận diện');
+          setCenterMessage('Lỗi nhận diện cơ thể: ' + error.name + ' | ' + error.message, true);
+        } finally {
+          isBusy = false;
+        }
+      }
+
+      animationId = requestAnimationFrame(detectLoop);
+    }
+
+    async function startCamera() {
+      try {
+        setStatus('Đang mở camera sau...');
+        setCenterMessage('AI đã sẵn sàng, đang mở camera sau...');
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+
+        video.srcObject = stream;
+        await video.play();
+        stableType = 'none';
+        stablePose = null;
+        stableHitFrames = 0;
+        stableMissFrames = 0;
+        detecting = true;
+        setStatus('Đang nhận diện');
+        hideCenterMessage();
+
+        notifyAlert('Đã bật cảnh báo người', 80);
+
+        if (animationId) cancelAnimationFrame(animationId);
+        animationId = requestAnimationFrame(detectLoop);
+      } catch (error) {
+        console.error(error);
+        setStatus('Lỗi camera');
+        setCenterMessage('Không mở được camera: ' + error.name + ' | ' + error.message, true);
+        notifyAlert('Không mở được camera. Hãy kiểm tra quyền camera', 600);
+      }
+    }
+
+    function stopCamera() {
+      detecting = false;
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      video.srcObject = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      stableType = 'none';
+      stablePose = null;
+      stableHitFrames = 0;
+      stableMissFrames = 0;
+    }
+
+    async function createPoseLandmarker() {
+      setStatus('Đang tải AI...');
+      setCenterMessage('Đang tải AI, camera sẽ tự bật...');
+      const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+      );
+
+      poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task'
+        },
+        runningMode: 'VIDEO',
+        numPoses: 2,
+        minPoseDetectionConfidence: DETECTION_CONF,
+        minPosePresenceConfidence: PRESENCE_CONF,
+        minTrackingConfidence: TRACKING_CONF
+      });
+
+      setStatus('AI sẵn sàng');
+      await startCamera();
+    }
+
+    async function init() {
+      try {
+        await createPoseLandmarker();
+      } catch (error) {
+        console.error(error);
+        setStatus('Lỗi tải AI');
+        setCenterMessage('Không tải được AI: ' + error.name + ' | ' + error.message, true);
+        notifyAlert('Không tải được AI nhận diện', 600);
+      }
+    }
+
+    window.addEventListener('beforeunload', stopCamera);
+    window.addEventListener('resize', drawFrameOnly);
+    init();
+  </script>
+</body>
+</html>
