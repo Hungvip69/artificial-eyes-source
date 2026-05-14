@@ -11945,13 +11945,31 @@
 
     sget-object v1, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Lit182:Lgnu/mapping/SimpleSymbol;
 
-    const-string v2, "B\u1ea5m \u0111\u1ec3 n\u00f3i"
+    const-string v2, "Nh\u1ea5n \u0111\u1ec3 n\u00f3i"
 
     sget-object v3, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Lit21:Lgnu/mapping/SimpleSymbol;
 
     invoke-static {v0, v1, v2, v3}, Lcom/google/youngandroid/runtime;->setAndCoerceProperty$Ex(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
 
     sget-object v0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Lit61:Lgnu/mapping/SimpleSymbol;
+
+    sget-object v1, Ljava/lang/Boolean;->TRUE:Ljava/lang/Boolean;
+
+    invoke-static {v0, v1}, Lcom/google/youngandroid/runtime;->addGlobalVarToCurrentFormEnvironment(Lgnu/mapping/Symbol;Ljava/lang/Object;)Ljava/lang/Object;
+
+    sget-object v0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Lit60:Lgnu/mapping/SimpleSymbol;
+
+    sget-object v1, Ljava/lang/Boolean;->FALSE:Ljava/lang/Boolean;
+
+    invoke-static {v0, v1}, Lcom/google/youngandroid/runtime;->addGlobalVarToCurrentFormEnvironment(Lgnu/mapping/Symbol;Ljava/lang/Object;)Ljava/lang/Object;
+
+    sget-object v0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Lit77:Lgnu/mapping/SimpleSymbol;
+
+    sget-object v1, Ljava/lang/Boolean;->FALSE:Ljava/lang/Boolean;
+
+    invoke-static {v0, v1}, Lcom/google/youngandroid/runtime;->addGlobalVarToCurrentFormEnvironment(Lgnu/mapping/Symbol;Ljava/lang/Object;)Ljava/lang/Object;
+
+    sget-object v0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Lit78:Lgnu/mapping/SimpleSymbol;
 
     sget-object v1, Ljava/lang/Boolean;->TRUE:Ljava/lang/Boolean;
 
