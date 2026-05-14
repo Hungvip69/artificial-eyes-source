@@ -1,0 +1,26 @@
+package com.google.android.gms.internal.clearcut;
+
+/* JADX INFO: loaded from: classes2.dex */
+final class zzbx {
+    private static final zzbu<?> zzgr = new zzbv();
+    private static final zzbu<?> zzgs = zzao();
+
+    private static zzbu<?> zzao() {
+        try {
+            return (zzbu) Class.forName("com.google.protobuf.ExtensionSchemaFull").getDeclaredConstructor(new Class[0]).newInstance(new Object[0]);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    static zzbu<?> zzap() {
+        return zzgr;
+    }
+
+    static zzbu<?> zzaq() {
+        if (zzgs != null) {
+            return zzgs;
+        }
+        throw new IllegalStateException("Protobuf runtime is not correctly loaded.");
+    }
+}

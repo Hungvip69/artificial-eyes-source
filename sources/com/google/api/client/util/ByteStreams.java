@@ -1,0 +1,118 @@
+package com.google.api.client.util;
+
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+
+/* JADX INFO: loaded from: classes2.dex */
+public final class ByteStreams {
+    private static final int BUF_SIZE = 4096;
+
+    public static long copy(InputStream from, OutputStream to) throws IOException {
+        Preconditions.checkNotNull(from);
+        Preconditions.checkNotNull(to);
+        byte[] buf = new byte[4096];
+        long total = 0;
+        while (true) {
+            int r = from.read(buf);
+            if (r != -1) {
+                to.write(buf, 0, r);
+                total += (long) r;
+            } else {
+                return total;
+            }
+        }
+    }
+
+    public static InputStream limit(InputStream in, long limit) {
+        return new LimitedInputStream(in, limit);
+    }
+
+    private static final class LimitedInputStream extends FilterInputStream {
+        private long left;
+        private long mark;
+
+        LimitedInputStream(InputStream in, long limit) {
+            super(in);
+            this.mark = -1L;
+            Preconditions.checkNotNull(in);
+            Preconditions.checkArgument(limit >= 0, "limit must be non-negative");
+            this.left = limit;
+        }
+
+        @Override // java.io.FilterInputStream, java.io.InputStream
+        public int available() throws IOException {
+            return (int) Math.min(this.in.available(), this.left);
+        }
+
+        @Override // java.io.FilterInputStream, java.io.InputStream
+        public synchronized void mark(int readLimit) {
+            this.in.mark(readLimit);
+            this.mark = this.left;
+        }
+
+        @Override // java.io.FilterInputStream, java.io.InputStream
+        public int read() throws IOException {
+            if (this.left == 0) {
+                return -1;
+            }
+            int result = this.in.read();
+            if (result != -1) {
+                this.left--;
+            }
+            return result;
+        }
+
+        @Override // java.io.FilterInputStream, java.io.InputStream
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (this.left == 0) {
+                return -1;
+            }
+            int result = this.in.read(b, off, (int) Math.min(len, this.left));
+            if (result != -1) {
+                this.left -= (long) result;
+            }
+            return result;
+        }
+
+        @Override // java.io.FilterInputStream, java.io.InputStream
+        public synchronized void reset() throws IOException {
+            if (!this.in.markSupported()) {
+                throw new IOException("Mark not supported");
+            }
+            if (this.mark == -1) {
+                throw new IOException("Mark not set");
+            }
+            this.in.reset();
+            this.left = this.mark;
+        }
+
+        @Override // java.io.FilterInputStream, java.io.InputStream
+        public long skip(long n) throws IOException {
+            long skipped = this.in.skip(Math.min(n, this.left));
+            this.left -= skipped;
+            return skipped;
+        }
+    }
+
+    public static int read(InputStream in, byte[] b, int off, int len) throws IOException {
+        Preconditions.checkNotNull(in);
+        Preconditions.checkNotNull(b);
+        if (len < 0) {
+            throw new IndexOutOfBoundsException("len is negative");
+        }
+        int total = 0;
+        while (total < len) {
+            int result = in.read(b, off + total, len - total);
+            if (result == -1) {
+                break;
+            }
+            total += result;
+        }
+        return total;
+    }
+
+    private ByteStreams() {
+    }
+}

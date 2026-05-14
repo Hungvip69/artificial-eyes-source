@@ -1,0 +1,34 @@
+package com.google.api.client.util;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+
+/* JADX INFO: loaded from: classes2.dex */
+public final class Lists {
+    public static <E> ArrayList<E> newArrayList() {
+        return new ArrayList<>();
+    }
+
+    public static <E> ArrayList<E> newArrayListWithCapacity(int initialArraySize) {
+        return new ArrayList<>(initialArraySize);
+    }
+
+    public static <E> ArrayList<E> newArrayList(Iterable<? extends E> elements) {
+        if (elements instanceof Collection) {
+            return new ArrayList<>(Collections2.cast(elements));
+        }
+        return newArrayList(elements.iterator());
+    }
+
+    public static <E> ArrayList<E> newArrayList(Iterator<? extends E> elements) {
+        ArrayList<E> list = newArrayList();
+        while (elements.hasNext()) {
+            list.add(elements.next());
+        }
+        return list;
+    }
+
+    private Lists() {
+    }
+}
