@@ -1157,6 +1157,12 @@
 
 .field public final dispatchEvent:Lgnu/expr/ModuleMethod;
 
+.field public currentMode:Ljava/lang/String;
+
+.field public isSwitchingMode:Z
+
+.field public modeEpoch:I
+
 .field public final dispatchGenericEvent:Lgnu/expr/ModuleMethod;
 
 .field public events$Mnto$Mnregister:Lgnu/lists/LList;
@@ -18973,6 +18979,162 @@
     invoke-direct {v1, p1, v0, v4, v3}, Lgnu/mapping/WrongType;-><init>(Ljava/lang/ClassCastException;Ljava/lang/String;ILjava/lang/Object;)V
 
     throw v1
+.end method
+
+
+.method public ensureModeState()V
+    .locals 1
+
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->currentMode:Ljava/lang/String;
+
+    if-nez v0, :cond_0
+
+    const-string v0, "IDLE"
+
+    iput-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->currentMode:Ljava/lang/String;
+
+    :cond_0
+    return-void
+.end method
+
+.method public isModeEpochValid(I)Z
+    .locals 1
+    .param p1, "epoch"    # I
+
+    iget v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->modeEpoch:I
+
+    if-ne p1, v0, :cond_0
+
+    const/4 v0, 0x1
+
+    return v0
+
+    :cond_0
+    const/4 v0, 0x0
+
+    return v0
+.end method
+
+.method public stopMode(Ljava/lang/String;)V
+    .locals 4
+    .param p1, "mode"    # Ljava/lang/String;
+
+    const/4 v3, 0x0
+
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Clock1:Lcom/google/appinventor/components/runtime/Clock;
+    if-eqz v0, :cond_0
+    invoke-virtual {v0, v3}, Lcom/google/appinventor/components/runtime/Clock;->TimerEnabled(Z)V
+
+    :cond_0
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Clock2:Lcom/google/appinventor/components/runtime/Clock;
+    if-eqz v0, :cond_1
+    invoke-virtual {v0, v3}, Lcom/google/appinventor/components/runtime/Clock;->TimerEnabled(Z)V
+
+    :cond_1
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Clock4:Lcom/google/appinventor/components/runtime/Clock;
+    if-eqz v0, :cond_2
+    invoke-virtual {v0, v3}, Lcom/google/appinventor/components/runtime/Clock;->TimerEnabled(Z)V
+
+    :cond_2
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Clock_BT:Lcom/google/appinventor/components/runtime/Clock;
+    if-eqz v0, :cond_3
+    invoke-virtual {v0, v3}, Lcom/google/appinventor/components/runtime/Clock;->TimerEnabled(Z)V
+
+    :cond_3
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Clock_walk:Lcom/google/appinventor/components/runtime/Clock;
+    if-eqz v0, :cond_4
+    invoke-virtual {v0, v3}, Lcom/google/appinventor/components/runtime/Clock;->TimerEnabled(Z)V
+
+    :cond_4
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Clock_AlertLock:Lcom/google/appinventor/components/runtime/Clock;
+    if-eqz v0, :cond_5
+    invoke-virtual {v0, v3}, Lcom/google/appinventor/components/runtime/Clock;->TimerEnabled(Z)V
+
+    :cond_5
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->TextToSpeech1:Lcom/google/appinventor/components/runtime/TextToSpeech;
+    if-eqz v0, :cond_6
+    invoke-virtual {v0}, Lcom/google/appinventor/components/runtime/TextToSpeech;->Stop()V
+
+    :cond_6
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->ScSpeechRecognizer1:Lcom/Scorpio/ScSpeechRecognizer;
+    if-eqz v0, :cond_7
+    invoke-virtual {v0}, Lcom/Scorpio/ScSpeechRecognizer;->Stop()V
+
+    :cond_7
+    return-void
+.end method
+
+.method public startMode(Ljava/lang/String;I)V
+    .locals 3
+    .param p1, "mode"    # Ljava/lang/String;
+    .param p2, "epoch"    # I
+
+    iget v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->modeEpoch:I
+
+    if-ne p2, v0, :cond_3
+
+    const-string v0, "READING"
+    invoke-virtual {v0, p1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v0
+    if-eqz v0, :cond_1
+
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Clock1:Lcom/google/appinventor/components/runtime/Clock;
+    if-eqz v0, :cond_0
+    const/4 v1, 0x1
+    invoke-virtual {v0, v1}, Lcom/google/appinventor/components/runtime/Clock;->TimerEnabled(Z)V
+
+    :cond_0
+    return-void
+
+    :cond_1
+    const-string v0, "WALKING"
+    invoke-virtual {v0, p1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v0
+    if-eqz v0, :cond_2
+
+    iget-object v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->Clock_walk:Lcom/google/appinventor/components/runtime/Clock;
+    if-eqz v0, :cond_2
+    const/4 v1, 0x1
+    invoke-virtual {v0, v1}, Lcom/google/appinventor/components/runtime/Clock;->TimerEnabled(Z)V
+
+    :cond_2
+    return-void
+
+    :cond_3
+    return-void
+.end method
+
+.method public switchMode(Ljava/lang/String;)V
+    .locals 2
+    .param p1, "targetMode"    # Ljava/lang/String;
+
+    invoke-virtual {p0}, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->ensureModeState()V
+
+    iget-boolean v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->isSwitchingMode:Z
+
+    if-eqz v0, :cond_0
+
+    return-void
+
+    :cond_0
+    const/4 v0, 0x1
+    iput-boolean v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->isSwitchingMode:Z
+
+    iget v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->modeEpoch:I
+    add-int/lit8 v0, v0, 0x1
+    iput v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->modeEpoch:I
+
+    iget-object v1, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->currentMode:Ljava/lang/String;
+    invoke-virtual {p0, v1}, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->stopMode(Ljava/lang/String;)V
+
+    invoke-virtual {p0, p1, v0}, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->startMode(Ljava/lang/String;I)V
+
+    iput-object p1, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->currentMode:Ljava/lang/String;
+
+    const/4 v0, 0x0
+    iput-boolean v0, p0, Lappinventor/ai_quachtanhung124/artificial_eyes/Screen1;->isSwitchingMode:Z
+
+    return-void
 .end method
 
 .method public sendError(Ljava/lang/Object;)V
